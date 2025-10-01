@@ -1,0 +1,30 @@
+# Modern VQA Extension - Requirements
+# Python 3.8+
+
+# Core Dependencies
+torch>=2.0.0
+transformers>=4.37.0
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# Translation
+googletrans==4.0.0rc1
+
+# Model Loading & Inference
+accelerate>=0.25.0
+sentencepiece>=0.1.99
+protobuf>=3.20.0
+safetensors>=0.4.0
+
+# Demo & Visualization
+gradio>=4.0.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Jupyter Notebooks
+jupyter>=1.0.0
+ipywidgets>=8.0.0
+
+# Utilities
+tqdm>=4.65.0
+requests>=2.31.0
