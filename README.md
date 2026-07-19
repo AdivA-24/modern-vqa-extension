@@ -32,6 +32,18 @@ Image + English question -> VLM (LLaVA-1.6 / ViLT / BLIP-2) -> Answer
 Answer -> Google Translate -> Target language
 ```
 
+## Project timeline
+
+- **Class project (Rice COMP646)**: proof-of-concept cross-lingual VQA with
+  ViLT + translation + FLAN-T5 answer composition
+  ([original demo](https://huggingface.co/spaces/ixxan/multilingual-vqa)).
+- **Oct-Nov 2025 rework** (this repo's early history): rebuilt around modern
+  VLMs: LLaVA-1.6 integration, unified pipeline, ViLT/BLIP-2 baselines,
+  Gradio comparison demo, evaluation rubric.
+- **July 2026 hardening**: custom inference engine with an explicit
+  prefill/decode loop and parity tests, serving surface with Prometheus
+  metrics, real-GPU benchmark notebook.
+
 ## What's in the repo
 
 | Layer | File | What it does |
