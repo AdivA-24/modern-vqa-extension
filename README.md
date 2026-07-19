@@ -1,288 +1,224 @@
-
-
-# Modern VQA Extension: Evolution of Cross-Lingual Visual Question Answering
+# Modern VQA Extension: Cross-Lingual Visual Question Answering
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![HuggingFace](https://img.shields.io/badge/%F0%9F%A4%97-Hugging%20Face-orange)](https://huggingface.co/spaces/YOUR_USERNAME/modern-vqa-extension)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-pytest-green.svg)](tests/)
 
-A comprehensive study comparing ViLT (2021) to modern Vision-Language Models (2024-2025) for cross-lingual Visual Question Answering. Built as an extension of the original [Cross-Lingual VQA project](link-to-original-paper) from 2024.
+Cross-lingual Visual Question Answering: ask a question about an image in any
+of 100+ languages, get the answer in the language you choose. This repo
+extends an earlier Rice University COMP646 proof-of-concept
+([original demo](https://huggingface.co/spaces/ixxan/multilingual-vqa)) by
+replacing its ViLT-era answering stage with modern vision-language models
+(LLaVA-1.6), and adds a custom PyTorch inference engine with an explicit
+prefill/decode loop, a serving surface with Prometheus metrics, and a
+real-GPU benchmark notebook.
 
-## 🌟 Key Features
+## Motivation
 
-- **Modern VLM Integration**: LLaVA-1.6, BLIP-2, and more (2024-2025 models)
-- **Legacy Comparison**: Direct comparison with ViLT (2021)
-- **Multilingual Support**: 100+ languages via Google Translate
-- **Cross-lingual QA**: Ask in one language, answer in another
-- **Reasoning & Explanations**: Modern models explain their answers
-- **Interactive Demo**: Gradio web interface
+Most multilingual VQA models are trained on a handful of high-resource
+languages and generalize poorly outside them. This project's design goal,
+motivated by low-resource languages such as Uyghur and Kurdish (the original
+project was co-authored by a native Uyghur speaker), is to make answer
+quality independent of the question language: translate in, answer with the
+strongest available English-centric model, translate out. The system then
+supports any language the translation layer supports, including ones no VQA
+training set covers.
 
-## 📊 Performance Comparison
+```
+Question (any language) -> Google Translate -> English
+                                                |
+Image + English question -> VLM (LLaVA-1.6 / ViLT / BLIP-2) -> Answer
+                                                |
+Answer -> Google Translate -> Target language
+```
 
-| Metric | ViLT (2021) | LLaVA-1.6 (2024) | Improvement |
-|--------|-------------|------------------|-------------|
-| **Answer Quality** | Short keywords | Complete, natural sentences | +85% |
-| **Reasoning** | None | Detailed explanations | ✓ |
-| **Complex Questions** | Limited context | Strong understanding | +60% |
-| **Multilingual Robustness** | Moderate | Excellent | +40% |
-| **Parameters** | 113M | 7B | 62x larger |
+## Project timeline
 
-## 🚀 Quick Start
+- **Class project (Rice COMP646)**: proof-of-concept cross-lingual VQA with
+  ViLT + translation + FLAN-T5 answer composition
+  ([original demo](https://huggingface.co/spaces/ixxan/multilingual-vqa)).
+- **Oct-Nov 2025 rework** (this repo's early history): rebuilt around modern
+  VLMs: LLaVA-1.6 integration, unified pipeline, ViLT/BLIP-2 baselines,
+  Gradio comparison demo, evaluation rubric.
+- **July 2026 hardening**: custom inference engine with an explicit
+  prefill/decode loop and parity tests, serving surface with Prometheus
+  metrics, real-GPU benchmark notebook.
 
-###  Installation
+## What's in the repo
+
+| Layer | File | What it does |
+|-------|------|--------------|
+| Pipeline | `src/pipeline.py` | Orchestrates translate -> VQA -> translate-back |
+| Models | `src/models.py` | Wrappers for LLaVA-1.6 (2024), BLIP-2 (2023), ViLT (2021) |
+| Translation | `src/translation.py` | Google Translate integration, 100+ languages |
+| **Inference engine** | `src/inference.py` | Hand-written prefill + KV-cache decode loop, batched generation, per-request metrics |
+| **Serving** | `src/server.py` | FastAPI: `/healthz` state machine, Prometheus `/metrics` with GPU telemetry, `/v1/vqa` |
+| Benchmark | `notebooks/gpu_benchmark.ipynb` | Run-all Colab notebook: real-GPU latency/throughput/telemetry measurements |
+| Tests | `tests/` | Decode-loop parity vs HF `generate()`, serving smoke tests |
+| Demo | `demo/app.py` | Gradio comparison UI (ViLT vs LLaVA-1.6) |
+
+## The custom inference engine
+
+`src/inference.py` implements the generation path explicitly instead of
+delegating to `model.generate()`:
+
+- **Prefill**: one forward pass over prompt + image (this is where LLaVA
+  swaps the `<image>` token for image-patch embeddings), producing the first
+  token and the KV cache. Compute-bound; its latency is time-to-first-token.
+- **Decode**: token-by-token steps that feed only the newest token plus the
+  cache. Memory-bandwidth-bound: each step streams the full weights to emit
+  one token, which is why raw GPU utilization is a misleading signal for
+  inference workloads.
+- **Batched generation**: left-padded static batching to amortize weight
+  reads across requests.
+- **Metrics**: TTFT, decode tokens/sec, and peak VRAM per request.
+- **Memory management**: fp16 on GPU (~14GB for 7B weights), optional 4-bit
+  NF4 quantization (~5GB) to fit 16GB cards like a Colab T4.
+
+The manual loop is verified **token-for-token identical** to HF
+`generate(do_sample=False)` in `tests/test_inference.py`, using a tiny
+LLaVA-Next checkpoint so the test runs on CPU in seconds.
+
+Full annotated tour: [docs/INFERENCE-WALKTHROUGH.md](docs/INFERENCE-WALKTHROUGH.md).
+
+### Relation to vLLM / SGLang
+
+This engine is deliberately the naive baseline: one request (or one static
+batch) at a time, contiguously grown KV cache. Production serving engines
+change exactly those two things: vLLM adds continuous batching (requests
+join/leave the running batch at decode-step granularity) and PagedAttention
+(block-based KV cache, like virtual memory); SGLang adds RadixAttention
+(cross-request KV reuse for shared prefixes) and fast constrained decoding.
+At serving scale you run one of those and keep code like this repo's at the
+prompt-construction and pre/post-processing layer. The walkthrough doc covers
+this in more depth.
+
+## Serving and observability
 
 ```bash
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/modern-vqa-extension.git
-cd modern-vqa-extension
+uvicorn src.server:app --port 8000
+```
 
-# Install dependencies
+- `GET /healthz`: node state (`loading` / `ready` / `degraded`) plus last error
+- `GET /metrics`: Prometheus exposition: request counters, latency and TTFT
+  histograms, decode tokens/sec, and per-GPU telemetry (utilization, memory,
+  temperature, power) via NVML
+- `POST /v1/vqa`: multipart `image` + `question` form fields
+
+On machines without an NVIDIA GPU, set `VQA_MOCK_GPU=1` to emit synthetic
+GPU series so the metrics pipeline can be developed and scraped anywhere.
+Other knobs: `VQA_MODEL` (HF model id), `VQA_DEVICE` (cuda/mps/cpu),
+`VQA_LAZY_LOAD=0` to load the model at startup.
+
+Minimal Prometheus scrape config:
+
+```yaml
+scrape_configs:
+  - job_name: vqa-node
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["localhost:8000"]
+```
+
+## Quick start
+
+```bash
+git clone https://github.com/AdivA-24/modern-vqa-extension.git
+cd modern-vqa-extension
 pip install -r requirements.txt
 ```
 
-### Basic Usage
-
 ```python
-from src.pipeline import CrossLingualVQAPipeline
 from PIL import Image
+from src.pipeline import CrossLingualVQAPipeline
 
-# Initialize pipeline with modern model
-pipeline = CrossLingualVQAPipeline("modern")
-
-# Load image
-image = Image.open("path/to/image.jpg")
-
-# Ask question in any language
+pipeline = CrossLingualVQAPipeline("modern")   # LLaVA-1.6
 result = pipeline.query(
-    image=image,
-    question="¿Qué están haciendo los gatos?",  # Spanish
-    target_lang="es"  # Answer in Spanish
+    image=Image.open("path/to/image.jpg"),
+    question="¿Qué están haciendo los gatos?",  # any language
+    target_lang="es",
 )
-
-print(result['answer'])
-# Output: "Los gatos están descansando juntos en un sofá..."
+print(result["answer"])
 ```
 
-### Compare Models
+Direct engine use (no translation layer):
 
 ```python
-# Compare legacy vs modern models
-from src.pipeline import CrossLingualVQAPipeline
+from PIL import Image
+from src.inference import LlavaInferenceEngine
 
-legacy = CrossLingualVQAPipeline("legacy")  # ViLT
-modern = CrossLingualVQAPipeline("modern")  # LLaVA-1.6
-
-# Get answers from both
-legacy_result = legacy.query(image, "What are they doing?")
-modern_result = modern.query(image, "What are they doing?", explain=True)
-
-print(f"ViLT: {legacy_result['answer']}")
-# Output: "sleeping"
-
-print(f"LLaVA: {modern_result['answer']}")
-# Output: "The two cats are lying together on a couch, appearing to be resting or sleeping peacefully."
+engine = LlavaInferenceEngine(load_in_4bit=True)  # fits a 16GB T4
+result = engine.greedy_decode(Image.open("cat.jpg"), "What is the cat doing?")
+print(result.text)
+print(result.metrics.as_dict())  # TTFT, decode tok/s, peak VRAM
 ```
 
-## 🎯 Use Cases
+## Model comparison: 2021 vs 2024
 
-1. **Language Learning**: Ask "What do you call this in French?"
-2. **Accessibility**: Multilingual descriptions for visually impaired users
-3. **Content Moderation**: Understand images across languages
-4. **Cultural Context**: Compare how different models interpret cultural content
+Qualitative comparison of ViLT (`dandelin/vilt-b32-finetuned-vqa`, 113M
+params, classification over 3,129 answers) against LLaVA-1.6
+(`llava-hf/llava-v1.6-mistral-7b-hf`, 7B params, generative):
 
-## 🏗️ Architecture
+| Question | ViLT (2021) | LLaVA-1.6 (2024) |
+|----------|-------------|------------------|
+| "What are the cats doing?" | "sleeping" | "The two cats are lying together on a couch, appearing to be resting or sleeping. They seem comfortable and relaxed in each other's company." |
+| "¿Cuántos gatos hay?" (via translation) | "2" | "Hay dos gatos en la imagen, descansando juntos en el sofá." |
 
-```
-Question (any language) → Google Translate → English
-                                              ↓
-Image + English Question → Modern VLM → Detailed Answer
-                                              ↓
-Detailed Answer → Google Translate → Target Language
-```
+Scored against a rubric (answer completeness, correctness, reasoning) on our
+own evaluation prompts, LLaVA-1.6 improves answer quality on the order of
+85% over the ViLT baseline. This is a rubric score on an internal evaluation
+set, not a public benchmark number; the step change is from classification
+over a fixed answer vocabulary to open-ended generation with reasoning.
 
-### Pipeline Components
+## GPU benchmark
 
-1. **Translation** (`src/translation.py`): Google Translate API for 100+ languages
-2. **VQA Models** (`src/models.py`):
-   - `ModernVQA`: LLaVA-1.6-Mistral-7B (2024)
-   - `LegacyVQA`: ViLT-B32 (2021)
-   - `BLIP2VQA`: BLIP-2-OPT-2.7B (2023)
-3. **Pipeline** (`src/pipeline.py`): Orchestrates translation + VQA + formatting
+`notebooks/gpu_benchmark.ipynb` is a run-all Colab notebook (free T4) that
+loads the 7B model 4-bit through the engine and records real TTFT, decode
+tokens/sec, peak VRAM, sequential-vs-batched throughput, and NVML telemetry
+sampled separately over the prefill and decode windows.
 
-## 📂 Project Structure
+<!-- RESULTS:BEGIN -->
+Results from a live run land here (see `gpu_run_results.json`).
+<!-- RESULTS:END -->
 
-```
-modern-vqa-extension/
-├── src/
-│   ├── models.py           # VQA model wrappers
-│   ├── translation.py      # Translation utilities
-│   ├── pipeline.py         # Main VQA pipeline
-│   └── __init__.py
-├── notebooks/
-│   ├── 01_model_exploration.ipynb
-│   ├── 02_original_vilt_pipeline.ipynb
-│   └── 03_comparison.ipynb
-├── demo/
-│   ├── app.py              # Gradio interface
-│   ├── requirements.txt
-│   └── README.md
-├── data/
-│   └── test_images/
-├── results/
-│   ├── comparison_results.md
-│   └── examples/
-├── requirements.txt
-├── LICENSE
-└── README.md
-```
-
-## 🔬 Supported Models
-
-### Modern VLMs (2024-2025)
-
-- **LLaVA-1.6** (`llava-hf/llava-v1.6-mistral-7b-hf`) - Default, best performance
-- **Qwen2-VL** (`Qwen/Qwen2-VL-2B-Instruct`) - Excellent multilingual support
-- **BLIP-2** (`Salesforce/blip2-opt-2.7b`) - Lightweight baseline
-
-### Legacy Model (2021)
-
-- **ViLT** (`dandelin/vilt-b32-finetuned-vqa`) - Original comparison baseline
-
-## 📝 Example Results
-
-### Question: "What are the cats doing?"
-
-| Model | Answer |
-|-------|--------|
-| **ViLT (2021)** | "sleeping" |
-| **LLaVA-1.6 (2024)** | "The two cats are lying together on a couch, appearing to be resting or sleeping. They seem comfortable and relaxed in each other's company." |
-
-### Cross-lingual Question: "¿Cuántos gatos hay?" (Spanish)
-
-| Model | Answer |
-|-------|--------|
-| **ViLT** | "2" |
-| **LLaVA-1.6** | "Hay dos gatos en la imagen, descansando juntos en el sofá." |
-
-## 🎮 Interactive Demo
-
-Try the live demo on HuggingFace Spaces:
-
-[![HuggingFace Spaces](https://img.shields.io/badge/%F0%9F%A4%97-Demo-orange)](https://huggingface.co/spaces/YOUR_USERNAME/modern-vqa-extension)
-
-Or run locally:
+## Tests
 
 ```bash
-cd demo
-python app.py
+pytest tests/
 ```
 
-## 📊 Benchmarking
+- `test_inference.py`: manual decode loop produces identical output to HF
+  `generate()`; metrics populate; batch shapes are correct.
+- `test_server.py`: health states, Prometheus exposition, end-to-end request
+  against a tiny checkpoint with mocked GPU telemetry.
 
-Run comprehensive benchmarks:
+## Requirements
 
-```python
-from src.pipeline import CrossLingualVQAPipeline
+- Python 3.9+, PyTorch 2.0+, Transformers 4.41+
+- GPU recommended for the 7B model: 24GB at fp16, or 16GB with
+  `load_in_4bit=True`. CPU inference works but is slow.
+- Known limitation: `googletrans==4.0.0rc1` is unofficial and can be flaky;
+  the translation layer isolates it behind `src/translation.py` so it can be
+  swapped for an official API.
 
-# Load test cases
-test_cases = [
-    {"image": "data/test_images/cats.jpg", "question": "What are they doing?"},
-    {"image": "data/test_images/street.jpg", "question": "¿Qué color es el coche?"},
-]
+## Citation
 
-# Compare models
-results = {}
-for model_type in ['modern', 'legacy']:
-    pipeline = CrossLingualVQAPipeline(model_type)
-    results[model_type] = [pipeline.query(tc['image'], tc['question']) for tc in test_cases]
-
-# Analyze results
-# See notebooks/03_comparison.ipynb for detailed analysis
-```
-
-## 🛠️ Development
-
-### Requirements
-
-- Python 3.8+
-- PyTorch 2.0+
-- Transformers 4.37+
-- 16GB+ RAM (for LLaVA-1.6)
-- GPU recommended (CPU inference is slow)
-
-### Installation for Development
-
-```bash
-git clone https://github.com/YOUR_USERNAME/modern-vqa-extension.git
-cd modern-vqa-extension
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install in development mode
-pip install -e .
-pip install -r requirements.txt
-```
-
-## 📖 Citation
-
-If you use this project in your research, please cite:
+Original proof-of-concept this repo extends:
 
 ```bibtex
-@misc{ahsan2025modernvqa,
-  title={Modern VQA Extension: Evolution of Cross-Lingual Visual Question Answering},
-  author={Ahsan, Adiv},
-  year={2025},
-  howpublished={\url{https://github.com/YOUR_USERNAME/modern-vqa-extension}},
-}
-```
-
-Original paper:
-```bibtex
-@inproceedings{ahsan2024crosslingual,
+@misc{abdurahman2023crosslingualvqa,
   title={Multilingual Visual Question Answering with Cross-lingual Support},
-  author={Ahsan, Adiv and Abdurahman, Irpan},
-  year={2024},
-  booktitle={COMP646 Project},
+  author={Abdurahman, Irpan and Ahsan, Adiv},
+  year={2023},
+  howpublished={Rice University COMP646 project},
+  note={Demo: https://huggingface.co/spaces/ixxan/multilingual-vqa}
 }
 ```
 
-## 🤝 Contributing
+## Acknowledgments
 
-Contributions welcome! Please:
+LLaVA team, Hugging Face, the ViLT authors, and Rice University COMP646.
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## Contact
 
-## 📜 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- **LLaVA Team** for the excellent vision-language model
-- **Hugging Face** for model hosting and Gradio
-- **Google Translate** for multilingual support
-- **ViLT Authors** for the baseline model
-- **Rice University COMP646** for the original project inspiration
-
-## 🔗 Links
-
-- [GitHub Repository](https://github.com/YOUR_USERNAME/modern-vqa-extension)
-- [HuggingFace Demo](https://huggingface.co/spaces/YOUR_USERNAME/modern-vqa-extension)
-- [Original 2024 Project](link-to-original-paper)
-- [LLaVA-1.6 Model](https://huggingface.co/llava-hf/llava-v1.6-mistral-7b-hf)
-
-## 📧 Contact
-
-Adiv Ahsan - aa156@rice.edu
-
-Project Link: [https://github.com/YOUR_USERNAME/modern-vqa-extension](https://github.com/YOUR_USERNAME/modern-vqa-extension)
-
----
-
-**Built with ❤️ as an extension of Cross-Lingual VQA research (2024-2025)**
+Adiv Ahsan - adiv.ahsan1@gmail.com

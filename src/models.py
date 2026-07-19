@@ -20,9 +20,9 @@ class ModernVQA:
         Args:
             model_name: HuggingFace model identifier
         """
-        try:
-            from transformers import LlavaNextProcessor, LlavaNextForConditionalGeneration
+        from transformers import LlavaNextProcessor, LlavaNextForConditionalGeneration
 
+        try:
             print(f"Loading modern VLM: {model_name}")
             self.processor = LlavaNextProcessor.from_pretrained(model_name)
             self.model = LlavaNextForConditionalGeneration.from_pretrained(
