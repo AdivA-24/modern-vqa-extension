@@ -10,6 +10,12 @@ __author__ = "Adiv Ahsan"
 
 from .models import ModernVQA, LegacyVQA, BLIP2VQA, get_model
 from .pipeline import CrossLingualVQAPipeline, create_pipeline
+from .inference import (
+    LlavaInferenceEngine,
+    InferenceMetrics,
+    InferenceResult,
+    resolve_device_and_dtype,
+)
 from .translation import (
     translate_to_english,
     translate_from_english,
@@ -27,6 +33,11 @@ __all__ = [
     # Pipeline
     "CrossLingualVQAPipeline",
     "create_pipeline",
+    # Inference engine
+    "LlavaInferenceEngine",
+    "InferenceMetrics",
+    "InferenceResult",
+    "resolve_device_and_dtype",
     # Translation
     "translate_to_english",
     "translate_from_english",
