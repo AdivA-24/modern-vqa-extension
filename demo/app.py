@@ -133,6 +133,8 @@ demo = gr.Interface(
                 ("Arabic", "ar"),
                 ("Russian", "ru"),
                 ("Hindi", "hi"),
+                ("Uyghur", "ug"),
+                ("Kurdish (Kurmanji)", "ku"),
             ],
             label="🌍 Target Answer Language",
             value="auto"
@@ -152,26 +154,6 @@ demo = gr.Interface(
 
     Ask questions about images in any language and get answers in your preferred language!
     """,
-    examples=[
-        [
-            "examples/cats.jpg",
-            "What are the cats doing?",
-            "en",
-            True
-        ],
-        [
-            "examples/cats.jpg",
-            "¿Cuántos gatos hay?",
-            "es",
-            True
-        ],
-        [
-            "examples/cats.jpg",
-            "Que font les chats?",
-            "fr",
-            True
-        ],
-    ],
     theme=gr.themes.Soft(),
     article="""
     ---
@@ -191,8 +173,8 @@ demo = gr.Interface(
 
     ### 🔗 Links
 
-    - [GitHub Repository](https://github.com/YOUR_USERNAME/modern-vqa-extension)
-    - [Original Paper](link-to-your-2024-paper)
+    - [GitHub Repository](https://github.com/AdivA-24/modern-vqa-extension)
+    - [Original Paper](https://huggingface.co/spaces/ixxan/multilingual-vqa)
     - [Hugging Face Models](https://huggingface.co/models)
 
     ---

@@ -28,5 +28,5 @@ Compare ViLT (2021) vs LLaVA-1.6 (2024) for multilingual Visual Question Answeri
 
 ## Links
 
-- [GitHub Repository](https://github.com/YOUR_USERNAME/modern-vqa-extension)
-- [Paper](link-to-paper)
+- [GitHub Repository](https://github.com/AdivA-24/modern-vqa-extension)
+- [Paper](https://huggingface.co/spaces/ixxan/multilingual-vqa)

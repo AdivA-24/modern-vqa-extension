@@ -114,8 +114,15 @@ def detect_language(text: str) -> str:
         raise TranslationError(f"Language detection failed: {str(e)}")
 
 
-# Supported language codes (subset of most common languages)
+# Supported language codes (subset; googletrans passes through any code
+# Google Translate accepts). Low-resource languages listed explicitly because
+# supporting them was the original motivation for the translation-mediated
+# architecture: VQA quality only depends on translation quality, not on the
+# question language having VQA training data.
 SUPPORTED_LANGUAGES = {
+    'ug': 'Uyghur',
+    'ku': 'Kurdish (Kurmanji)',
+    'ckb': 'Kurdish (Sorani)',
     'en': 'English',
     'es': 'Spanish',
     'fr': 'French',
