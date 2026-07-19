@@ -1,0 +1,108 @@
+{
+  "gpu": "Tesla T4",
+  "quantization": "4-bit NF4 (bitsandbytes), fp16 compute",
+  "model": "llava-hf/llava-v1.6-mistral-7b-hf",
+  "load_seconds": 264.6,
+  "vram_after_load_gib": 4.35,
+  "sequential_runs": [
+    {
+      "image": "cats",
+      "question": "What are the animals doing, and what objects are near them?",
+      "answer": "The animals, which appear to be cats, are lying down and sleeping on a pink blanket. Near them, there is a remote control and a television remote.",
+      "metrics": {
+        "prefill_seconds": 5.1663,
+        "decode_seconds": 2.8693,
+        "prompt_tokens": 2365,
+        "generated_tokens": 33,
+        "decode_tokens_per_second": 11.15,
+        "peak_memory_bytes": 6909628928
+      },
+      "telemetry": {
+        "prefill_sm_util": {
+          "mean": 64.15306122448979,
+          "max": 100,
+          "n": 98
+        },
+        "decode_sm_util": {
+          "mean": 92.9090909090909,
+          "max": 100,
+          "n": 55
+        },
+        "decode_mem_util": {
+          "mean": 73.87272727272727,
+          "max": 81,
+          "n": 55
+        },
+        "peak_mem_used_gib": 7.11346435546875
+      }
+    },
+    {
+      "image": "street",
+      "question": "Describe the scene and count the people you can see.",
+      "answer": "In the image, there is a woman standing in a kitchen area. She is wearing a black shirt and has her back to the camera. The kitchen is well-equipped with a refrigerator, a microwave, and a sink. There are also several chairs and a dining table visible in the room. The room has a warm and inviting atmosphere, with a fireplace and a vase with flowers on a table. The walls are painted in a bright yellow color, and there is",
+      "metrics": {
+        "prefill_seconds": 1.8165,
+        "decode_seconds": 8.106,
+        "prompt_tokens": 2167,
+        "generated_tokens": 100,
+        "decode_tokens_per_second": 12.21,
+        "peak_memory_bytes": 6592073728
+      },
+      "telemetry": {
+        "prefill_sm_util": {
+          "mean": 97.65714285714286,
+          "max": 100,
+          "n": 35
+        },
+        "decode_sm_util": {
+          "mean": 95.78709677419354,
+          "max": 100,
+          "n": 155
+        },
+        "decode_mem_util": {
+          "mean": 73.61290322580645,
+          "max": 80,
+          "n": 155
+        },
+        "peak_mem_used_gib": 7.11346435546875
+      }
+    },
+    {
+      "image": "cats",
+      "question": "What colors are the two animals?",
+      "answer": "The two animals are black and white, and brown and white.",
+      "metrics": {
+        "prefill_seconds": 2.0214,
+        "decode_seconds": 1.1891,
+        "prompt_tokens": 2359,
+        "generated_tokens": 14,
+        "decode_tokens_per_second": 10.93,
+        "peak_memory_bytes": 6900476928
+      },
+      "telemetry": {
+        "prefill_sm_util": {
+          "mean": 96.92307692307692,
+          "max": 100,
+          "n": 39
+        },
+        "decode_sm_util": {
+          "mean": 100.0,
+          "max": 100,
+          "n": 23
+        },
+        "decode_mem_util": {
+          "mean": 61.43478260869565,
+          "max": 63,
+          "n": 23
+        },
+        "peak_mem_used_gib": 7.11346435546875
+      }
+    }
+  ],
+  "batch": {
+    "n_requests": 3,
+    "wall_seconds": 29.66,
+    "aggregate_tokens_per_second": 10.11,
+    "sequential_aggregate_tokens_per_second": 6.94
+  }
+}

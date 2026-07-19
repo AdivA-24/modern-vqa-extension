@@ -150,7 +150,26 @@ tokens/sec, peak VRAM, sequential-vs-batched throughput, and NVML telemetry
 sampled separately over the prefill and decode windows.
 
 <!-- RESULTS:BEGIN -->
-Results from a live run land here (see `gpu_run_results.json`).
+Measured on a Colab Tesla T4 (16GB), 4-bit NF4 weights with fp16 compute
+(raw data: [`gpu_run_results.json`](gpu_run_results.json)):
+
+| Metric | Measured |
+|--------|----------|
+| Weights in VRAM | 4.35 GiB (vs ~14 GiB at fp16) |
+| Peak VRAM during inference | 7.11 GiB |
+| Prompt size | ~2.2-2.4K tokens per request (~2K of them image-patch tokens) |
+| Time-to-first-token | 1.8-2.0 s steady state (5.2 s on the first request, includes CUDA warmup) |
+| Decode throughput | 11-12 tokens/sec per request |
+| Static batching (3 requests) | 10.1 vs 6.9 tokens/sec aggregate, a 1.46x gain |
+
+One instructive telemetry finding: NVML's `utilization.gpu` read 93-100%
+during decode even though decode is dominated by weight reads (memory
+controller utilization 61-74%, and NF4 dequantization adds compute). That
+counter reports the fraction of time any kernel is active, not how much of
+the GPU's compute is doing useful work, which is exactly why "GPU
+utilization" alone is a poor efficiency or health signal for LLM inference
+and why this engine reports TTFT, decode tokens/sec, and VRAM headroom as
+first-class metrics instead.
 <!-- RESULTS:END -->
 
 ## Tests
