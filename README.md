@@ -17,8 +17,7 @@ real-GPU benchmark notebook.
 
 Most multilingual VQA models are trained on a handful of high-resource
 languages and generalize poorly outside them. This project's design goal,
-motivated by low-resource languages such as Uyghur and Kurdish (the original
-project was co-authored by a native Uyghur speaker), is to make answer
+motivated by low-resource languages such as Uyghur and Kurdish, is to make answer
 quality independent of the question language: translate in, answer with the
 strongest available English-centric model, translate out. The system then
 supports any language the translation layer supports, including ones no VQA
@@ -31,19 +30,6 @@ Image + English question -> VLM (LLaVA-1.6 / ViLT / BLIP-2) -> Answer
                                                 |
 Answer -> Google Translate -> Target language
 ```
-
-## Project timeline
-
-- **Class project (Rice COMP646)**: proof-of-concept cross-lingual VQA with
-  ViLT + translation + FLAN-T5 answer composition
-  ([original demo](https://huggingface.co/spaces/ixxan/multilingual-vqa)).
-- **Oct-Nov 2025 rework** (this repo's early history): rebuilt around modern
-  VLMs: LLaVA-1.6 integration, unified pipeline, ViLT/BLIP-2 baselines,
-  Gradio comparison demo, evaluation rubric.
-- **July 2026 hardening**: custom inference engine with an explicit
-  prefill/decode loop and parity tests, serving surface with Prometheus
-  metrics, real-GPU benchmark notebook.
-
 ## What's in the repo
 
 | Layer | File | What it does |
@@ -78,20 +64,6 @@ delegating to `model.generate()`:
 The manual loop is verified **token-for-token identical** to HF
 `generate(do_sample=False)` in `tests/test_inference.py`, using a tiny
 LLaVA-Next checkpoint so the test runs on CPU in seconds.
-
-Full annotated tour: [docs/INFERENCE-WALKTHROUGH.md](docs/INFERENCE-WALKTHROUGH.md).
-
-### Relation to vLLM / SGLang
-
-This engine is deliberately the naive baseline: one request (or one static
-batch) at a time, contiguously grown KV cache. Production serving engines
-change exactly those two things: vLLM adds continuous batching (requests
-join/leave the running batch at decode-step granularity) and PagedAttention
-(block-based KV cache, like virtual memory); SGLang adds RadixAttention
-(cross-request KV reuse for shared prefixes) and fast constrained decoding.
-At serving scale you run one of those and keep code like this repo's at the
-prompt-construction and pre/post-processing layer. The walkthrough doc covers
-this in more depth.
 
 ## Serving and observability
 
@@ -214,10 +186,6 @@ Original proof-of-concept this repo extends:
   note={Demo: https://huggingface.co/spaces/ixxan/multilingual-vqa}
 }
 ```
-
-## Acknowledgments
-
-LLaVA team, Hugging Face, the ViLT authors, and Rice University COMP646.
 
 ## Contact
 
